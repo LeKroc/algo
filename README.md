@@ -1,1 +1,2 @@
-# algo
+# 1ère étape : Vous développerez une application de gestion de produits pour commerçants, avec lecture de fichiers, ajout, tri et recherche.
+# 2ème étape : Le projet évoluera vers une version multi-utilisateurs avec sécurisation des données (détection de mots depasse compromis via API). Une interface graphique (Tkinter ou PyQt), la gestiondes commandes et affichage de statistiques (Matplotlib, Seaborn) viendront enrichir outil.
