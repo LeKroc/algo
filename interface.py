@@ -40,7 +40,7 @@ def ajouter_produit_gui():
         writer.writerow([id_val, nom_val, qte_val, prix_val])
     
     vider_champs_stock()
-    rafraichir_tout() # Met à jour stock + stats
+    rafraichir_tout()
     messagebox.showinfo("Succès", f"Produit '{nom_val}' ajouté !")
 
 def supprimer_produit_gui():
@@ -153,7 +153,6 @@ def clic_cmd(event):
 
 def generer_graphiques():
     """Génère les graphiques Stock et Ventes"""
-    
     # 1. Nettoyage de l'ancienne figure si elle existe
     for widget in frame_canvas.winfo_children():
         widget.destroy()
@@ -170,24 +169,24 @@ def generer_graphiques():
     noms_produits = [ligne[1] for ligne in data_stock]
     qtes_stock = [int(ligne[2]) for ligne in data_stock]
 
-    # --- Préparation Données VENTES (Agrégation) ---
+    # --- Préparation Données VENTES ---
     ventes_par_produit = {}
     if data_cmd:
         for cmd in data_cmd:
-            nom = cmd[2] # Nom du produit dans commandes.csv
+            nom = cmd[2]
             qte = int(cmd[3])
             ventes_par_produit[nom] = ventes_par_produit.get(nom, 0) + qte
 
-    # 3. Création de la figure Matplotlib (1 ligne, 2 colonnes)
+    # 3. Création de la figure Matplotlib
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5), dpi=100)
-    fig.patch.set_facecolor('#f0f0f0') # Couleur de fond gris clair pour fondre dans Tkinter
+    fig.patch.set_facecolor('#f0f0f0')
 
     # --- GRAPHIQUE 1 : Bar Chart (Stock) ---
-    couleurs = ['#4CAF50' if q > 5 else '#F44336' for q in qtes_stock] # Vert si stock ok, Rouge si faible
+    couleurs = ['#4CAF50' if q > 5 else '#F44336' for q in qtes_stock]
     ax1.bar(noms_produits, qtes_stock, color=couleurs)
     ax1.set_title("Niveau de Stock Actuel", fontsize=10, fontweight='bold')
     ax1.set_ylabel("Quantité")
-    ax1.tick_params(axis='x', rotation=45, labelsize=8) # Rotation des noms si trop longs
+    ax1.tick_params(axis='x', rotation=45, labelsize=8)
 
     # --- GRAPHIQUE 2 : Pie Chart (Ventes) ---
     if ventes_par_produit:
@@ -199,7 +198,7 @@ def generer_graphiques():
         ax2.text(0.5, 0.5, "Aucune vente enregistrée", ha='center', va='center')
         ax2.axis('off')
 
-    plt.tight_layout() # Ajustement automatique des marges
+    plt.tight_layout()
 
     # 4. Intégration dans Tkinter
     canvas = FigureCanvasTkAgg(fig, master=frame_canvas)
@@ -207,83 +206,88 @@ def generer_graphiques():
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
 
 def rafraichir_tout():
-    # CORRECTION : Indentation ajoutée ici
     charger_donnees_stock()
     charger_donnees_cmd()
     generer_graphiques()
 
 # =============================================================================
-# INTERFACE GRAPHIQUE PRINCIPALE
+# FONCTION DE LANCEMENT DE L'APPLICATION (ETAPE 3)
 # =============================================================================
 
-fenetre = tk.Tk()
-fenetre.title("Système de Gestion Complet")
-fenetre.geometry("1000x700")
+def lancer_app():
+    # On rend les variables globales pour que les fonctions (ajouter_produit_gui, etc.) puissent les voir
+    global fenetre, tableau_stock, entry_id, entry_nom, entry_qte, entry_prix
+    global tableau_cmd, entry_cmd_idprod, entry_cmd_qte, frame_canvas
 
-# Création des onglets
-notebook = ttk.Notebook(fenetre)
-notebook.pack(fill='both', expand=True, padx=10, pady=10)
+    fenetre = tk.Tk()
+    fenetre.title("Système de Gestion Complet")
+    fenetre.geometry("1000x700")
 
-tab_stock = tk.Frame(notebook, bg="#f0f0f0")
-tab_cmd = tk.Frame(notebook, bg="#f0f0f0")
-tab_stats = tk.Frame(notebook, bg="#f0f0f0") # Nouvel onglet
+    # Création des onglets
+    notebook = ttk.Notebook(fenetre)
+    notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
-notebook.add(tab_stock, text="📦 Gestion Stock")
-notebook.add(tab_cmd, text="🛒 Gestion Commandes")
-notebook.add(tab_stats, text="📊 Statistiques")
+    tab_stock = tk.Frame(notebook, bg="#f0f0f0")
+    tab_cmd = tk.Frame(notebook, bg="#f0f0f0")
+    tab_stats = tk.Frame(notebook, bg="#f0f0f0")
 
-# --- CONTENU ONGLET 1 : STOCK ---
-frame_form = tk.LabelFrame(tab_stock, text="Produit", padx=10, pady=10)
-frame_form.pack(fill="x", padx=10, pady=10)
+    notebook.add(tab_stock, text="📦 Gestion Stock")
+    notebook.add(tab_cmd, text="🛒 Gestion Commandes")
+    notebook.add(tab_stats, text="📊 Statistiques")
 
-tk.Label(frame_form, text="ID").grid(row=0, column=0); entry_id = tk.Entry(frame_form); entry_id.grid(row=0, column=1)
-tk.Label(frame_form, text="Nom").grid(row=0, column=2); entry_nom = tk.Entry(frame_form); entry_nom.grid(row=0, column=3)
-tk.Label(frame_form, text="Qte").grid(row=0, column=4); entry_qte = tk.Entry(frame_form); entry_qte.grid(row=0, column=5)
-tk.Label(frame_form, text="Prix").grid(row=0, column=6); entry_prix = tk.Entry(frame_form); entry_prix.grid(row=0, column=7)
+    # --- CONTENU ONGLET 1 : STOCK ---
+    frame_form = tk.LabelFrame(tab_stock, text="Produit", padx=10, pady=10)
+    frame_form.pack(fill="x", padx=10, pady=10)
 
-f_btn_stock = tk.Frame(tab_stock); f_btn_stock.pack(pady=5)
-tk.Button(f_btn_stock, text="Ajouter", command=ajouter_produit_gui, bg="#4CAF50", fg="white").pack(side="left", padx=5)
-tk.Button(f_btn_stock, text="Vider", command=vider_champs_stock, bg="#FF9800", fg="white").pack(side="left", padx=5)
-tk.Button(f_btn_stock, text="Supprimer", command=supprimer_produit_gui, bg="#F44336", fg="white").pack(side="left", padx=5)
+    tk.Label(frame_form, text="ID").grid(row=0, column=0); entry_id = tk.Entry(frame_form); entry_id.grid(row=0, column=1)
+    tk.Label(frame_form, text="Nom").grid(row=0, column=2); entry_nom = tk.Entry(frame_form); entry_nom.grid(row=0, column=3)
+    tk.Label(frame_form, text="Qte").grid(row=0, column=4); entry_qte = tk.Entry(frame_form); entry_qte.grid(row=0, column=5)
+    tk.Label(frame_form, text="Prix").grid(row=0, column=6); entry_prix = tk.Entry(frame_form); entry_prix.grid(row=0, column=7)
 
-tableau_stock = ttk.Treeview(tab_stock, columns=("id", "nom", "qte", "prix"), show="headings", height=8)
-tableau_stock.heading("id", text="ID"); tableau_stock.heading("nom", text="Nom"); tableau_stock.heading("qte", text="Stock"); tableau_stock.heading("prix", text="Prix")
-tableau_stock.pack(fill="both", expand=True, padx=10, pady=10)
-tableau_stock.bind("<ButtonRelease-1>", clic_stock)
+    f_btn_stock = tk.Frame(tab_stock); f_btn_stock.pack(pady=5)
+    tk.Button(f_btn_stock, text="Ajouter", command=ajouter_produit_gui, bg="#4CAF50", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_stock, text="Vider", command=vider_champs_stock, bg="#FF9800", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_stock, text="Supprimer", command=supprimer_produit_gui, bg="#F44336", fg="white").pack(side="left", padx=5)
 
-# --- CONTENU ONGLET 2 : COMMANDES ---
-frame_cmd_form = tk.LabelFrame(tab_cmd, text="Action Commande", padx=10, pady=10)
-frame_cmd_form.pack(fill="x", padx=10, pady=10)
+    tableau_stock = ttk.Treeview(tab_stock, columns=("id", "nom", "qte", "prix"), show="headings", height=8)
+    tableau_stock.heading("id", text="ID"); tableau_stock.heading("nom", text="Nom"); tableau_stock.heading("qte", text="Stock"); tableau_stock.heading("prix", text="Prix")
+    tableau_stock.pack(fill="both", expand=True, padx=10, pady=10)
+    tableau_stock.bind("<ButtonRelease-1>", clic_stock)
 
-tk.Label(frame_cmd_form, text="ID Produit :").grid(row=0, column=0, padx=5)
-entry_cmd_idprod = tk.Entry(frame_cmd_form)
-entry_cmd_idprod.grid(row=0, column=1, padx=5)
+    # --- CONTENU ONGLET 2 : COMMANDES ---
+    frame_cmd_form = tk.LabelFrame(tab_cmd, text="Action Commande", padx=10, pady=10)
+    frame_cmd_form.pack(fill="x", padx=10, pady=10)
 
-tk.Label(frame_cmd_form, text="Quantité :").grid(row=0, column=2, padx=5)
-entry_cmd_qte = tk.Entry(frame_cmd_form)
-entry_cmd_qte.grid(row=0, column=3, padx=5)
+    tk.Label(frame_cmd_form, text="ID Produit :").grid(row=0, column=0, padx=5)
+    entry_cmd_idprod = tk.Entry(frame_cmd_form)
+    entry_cmd_idprod.grid(row=0, column=1, padx=5)
 
-# CORRECTION : 'f_btn_cmd' au lieu de 'if_btn_cmd'
-f_btn_cmd = tk.Frame(tab_cmd); f_btn_cmd.pack(pady=5)
-tk.Button(f_btn_cmd, text="✚ Nouvelle Commande", command=action_creer_cmd, bg="#4CAF50", fg="white").pack(side="left", padx=5)
-tk.Button(f_btn_cmd, text="✎ Modifier (Qte)", command=action_modifier_cmd, bg="#2196F3", fg="white").pack(side="left", padx=5)
-tk.Button(f_btn_cmd, text="✖ Annuler Commande", command=action_supprimer_cmd, bg="#F44336", fg="white").pack(side="left", padx=5)
+    tk.Label(frame_cmd_form, text="Quantité :").grid(row=0, column=2, padx=5)
+    entry_cmd_qte = tk.Entry(frame_cmd_form)
+    entry_cmd_qte.grid(row=0, column=3, padx=5)
 
-tableau_cmd = ttk.Treeview(tab_cmd, columns=("id", "pid", "nom", "qte", "total", "date"), show="headings")
-tableau_cmd.heading("id", text="ID Cmd"); tableau_cmd.heading("pid", text="ID Prod"); tableau_cmd.heading("nom", text="Produit")
-tableau_cmd.heading("qte", text="Qte Vendue"); tableau_cmd.heading("total", text="Total €"); tableau_cmd.heading("date", text="Date")
-tableau_cmd.pack(fill="both", expand=True, padx=10, pady=10)
-tableau_cmd.bind("<ButtonRelease-1>", clic_cmd)
+    f_btn_cmd = tk.Frame(tab_cmd); f_btn_cmd.pack(pady=5)
+    tk.Button(f_btn_cmd, text="✚ Nouvelle Commande", command=action_creer_cmd, bg="#4CAF50", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_cmd, text="✎ Modifier (Qte)", command=action_modifier_cmd, bg="#2196F3", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_cmd, text="✖ Annuler Commande", command=action_supprimer_cmd, bg="#F44336", fg="white").pack(side="left", padx=5)
 
-# --- CONTENU ONGLET 3 : STATISTIQUES ---
-# Bouton rafraichir en haut
-btn_refresh = tk.Button(tab_stats, text="🔄 Actualiser les Graphiques", command=rafraichir_tout, bg="#607D8B", fg="white")
-btn_refresh.pack(pady=10)
+    tableau_cmd = ttk.Treeview(tab_cmd, columns=("id", "pid", "nom", "qte", "total", "date"), show="headings")
+    tableau_cmd.heading("id", text="ID Cmd"); tableau_cmd.heading("pid", text="ID Prod"); tableau_cmd.heading("nom", text="Produit")
+    tableau_cmd.heading("qte", text="Qte Vendue"); tableau_cmd.heading("total", text="Total €"); tableau_cmd.heading("date", text="Date")
+    tableau_cmd.pack(fill="both", expand=True, padx=10, pady=10)
+    tableau_cmd.bind("<ButtonRelease-1>", clic_cmd)
 
-# Zone où le graphique va s'afficher
-frame_canvas = tk.Frame(tab_stats, bg="#f0f0f0")
-frame_canvas.pack(fill="both", expand=True, padx=10, pady=10)
+    # --- CONTENU ONGLET 3 : STATISTIQUES ---
+    btn_refresh = tk.Button(tab_stats, text="🔄 Actualiser les Graphiques", command=rafraichir_tout, bg="#607D8B", fg="white")
+    btn_refresh.pack(pady=10)
 
-# --- DEMARRAGE ---
-rafraichir_tout() # Lance le chargement initial de tout (y compris les stats)
-fenetre.mainloop()
+    frame_canvas = tk.Frame(tab_stats, bg="#f0f0f0")
+    frame_canvas.pack(fill="both", expand=True, padx=10, pady=10)
+
+    # --- DEMARRAGE ---
+    rafraichir_tout()
+    fenetre.mainloop()
+
+# Bloc de sécurité : permet d'importer ce fichier sans qu'il se lance tout seul
+if __name__ == "__main__":
+    lancer_app()

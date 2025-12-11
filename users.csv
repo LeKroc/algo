@@ -1,0 +1,2 @@
+username,salt,password_hash,email,role,created_at
+Ellie,3a4afa6c32fee09c1121a96e8e225bd2,614a0e9d12bb69b8792cfb4fb7420719068f0457923e32f808f8912ff0870a68,ellie@gmail.com,commercant,2025-12-11 15:31:01
