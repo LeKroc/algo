@@ -1,0 +1,13 @@
+timestamp,username,status,message
+2025-12-11 15:06:22,bob,REGISTER_SUCCESS,Nouveau compte créé
+2025-12-11 15:06:39,bob,LOGIN_FAIL,Utilisateur inconnu
+2025-12-11 15:06:52,bob,LOGIN_FAIL,Utilisateur inconnu
+2025-12-11 15:07:26,boby,REGISTER_SUCCESS,Nouveau compte créé
+2025-12-11 15:07:34,boby,LOGIN_FAIL,Mot de passe incorrect
+2025-12-11 15:07:44,boby,LOGIN_SUCCESS,Connexion réussie
+2025-12-11 15:21:57,boby,LOGIN_FAIL,Utilisateur inconnu
+2025-12-11 15:29:05,Ellie,LOGIN_FAIL,Utilisateur inconnu
+2025-12-11 15:29:16,Ellie,LOGIN_FAIL,Utilisateur inconnu
+2025-12-11 15:31:01,Ellie,REGISTER_SUCCESS,Nouveau compte créé
+2025-12-11 15:31:17,Ellie,LOGIN_SUCCESS,Connexion réussie
+2025-12-11 15:32:34,Ellie,LOGIN_SUCCESS,Connexion réussie
