@@ -1,2 +1,4 @@
 username,salt,password_hash,email,role,created_at
 Ellie,3a4afa6c32fee09c1121a96e8e225bd2,614a0e9d12bb69b8792cfb4fb7420719068f0457923e32f808f8912ff0870a68,ellie@gmail.com,commercant,2025-12-11 15:31:01
+Curry,c5a2270de8cba11626ad812f47bfa9d2,1186b0d08a12efa05b8cec520bd5717be73f86529c996be65f77ebdcdca4c50d,admin,commercant,2025-12-12 15:21:36
+James,77349c1112a25991dfcb954aa1d812ab,3a68f9abca5332f8ad9b6b291d17a178f82cc125d21d6f53654c8884ed46d893,Password123!,commercant,2025-12-12 15:23:59

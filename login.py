@@ -7,7 +7,7 @@ class LoginApp:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("Sécurité - Authentification")
-        self.root.geometry("400x500") # Un peu plus grand pour l'email
+        self.root.geometry("400x500") 
         self.root.configure(bg="#2C3E50")
 
         self.is_register_mode = False
@@ -18,17 +18,15 @@ class LoginApp:
         self.lbl_title = tk.Label(self.frame, text="CONNEXION", font=("Arial", 18, "bold"), bg="#34495E", fg="white")
         self.lbl_title.pack(pady=10)
 
-        # Champ Utilisateur
-        tk.Label(self.frame, text="Nom d'utilisateur", bg="#34495E", fg="#BDC3C7").pack(anchor="w")
+        
+        tk.Label(self.frame, text="Nom d'utilisateur ou Email", bg="#34495E", fg="#BDC3C7").pack(anchor="w")
         self.entry_user = tk.Entry(self.frame, font=("Arial", 12))
         self.entry_user.pack(fill="x", pady=5)
 
-        # Champ Email (Caché au début)
+        
         self.lbl_email = tk.Label(self.frame, text="Email", bg="#34495E", fg="#BDC3C7")
         self.entry_email = tk.Entry(self.frame, font=("Arial", 12))
-        # On ne les pack pas tout de suite, seulement si inscription
-
-        # Champ Mot de passe
+        
         tk.Label(self.frame, text="Mot de passe", bg="#34495E", fg="#BDC3C7").pack(anchor="w")
         self.entry_pass = tk.Entry(self.frame, font=("Arial", 12), show="*")
         self.entry_pass.pack(fill="x", pady=5)
@@ -48,7 +46,7 @@ class LoginApp:
         
         if self.is_register_mode:
             self.lbl_title.config(text="INSCRIPTION")
-            # On affiche le champ Email entre User et Password
+            
             self.lbl_email.pack(anchor="w", after=self.entry_user)
             self.entry_email.pack(fill="x", pady=5, after=self.lbl_email)
             
@@ -57,10 +55,10 @@ class LoginApp:
             self.lbl_info.pack(after=self.entry_pass)
         else:
             self.lbl_title.config(text="CONNEXION")
-            # On cache le champ Email
+            
             self.lbl_email.pack_forget()
             self.entry_email.pack_forget()
-            
+        
             self.btn_action.config(text="SE CONNECTER", bg="#2ECC71")
             self.btn_switch.config(text="Créer un compte")
             self.lbl_info.pack_forget()
@@ -75,8 +73,7 @@ class LoginApp:
                 messagebox.showwarning("Attention", "Remplissez tous les champs (Email inclus)")
                 return
             
-            # Appel avec les nouveaux arguments
-            success, msg = authentification.register_user(user, pwd, email)
+            success, msg = authentification.register_user(user, email, pwd)
             
             if success:
                 messagebox.showinfo("Succès", msg)
@@ -91,7 +88,7 @@ class LoginApp:
                 messagebox.showwarning("Attention", "Remplissez tous les champs")
                 return
 
-            success, msg = authentification.verify_credentials(user, pwd)
+            success, msg = authentification.verify_credentials(user or email, pwd)
             if success:
                 self.root.destroy()
                 if hasattr(interface, 'lancer_app'):

@@ -3,12 +3,43 @@ from tkinter import ttk, messagebox
 import csv
 import fonction as f
 
-# --- IMPORTS POUR LES GRAPHIQUES ---
+
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# --- INITIALISATION ---
+
 f.init_files()
+
+TIMEOUT_LIMIT = 300000 
+timer_id = None
+
+def reset_timer(event=None):
+    global timer_id, fenetre
+    
+    if timer_id:
+        try:
+            fenetre.after_cancel(timer_id)
+        except:
+            pass
+    timer_id = fenetre.after(TIMEOUT_LIMIT, deconnexion_automatique)
+
+def deconnexion_automatique():
+    messagebox.showwarning()
+    deconnexion()
+
+def deconnexion():
+    global timer_id
+    if timer_id:
+        try:
+            fenetre.after_cancel(timer_id)
+        except:
+            pass
+    fenetre.destroy()
+    
+    import login
+    login.LoginApp()
+    
+
 
 # =============================================================================
 # LOGIQUE ONGLET STOCK
@@ -153,11 +184,11 @@ def clic_cmd(event):
 
 def generer_graphiques():
     """Génère les graphiques Stock et Ventes"""
-    # 1. Nettoyage de l'ancienne figure si elle existe
+    
     for widget in frame_canvas.winfo_children():
         widget.destroy()
 
-    # 2. Récupération des données
+   
     h_stock, data_stock = f.parcourir()
     h_cmd, data_cmd = f.lire_commandes()
 
@@ -165,11 +196,11 @@ def generer_graphiques():
         tk.Label(frame_canvas, text="Pas de données stock à afficher").pack()
         return
 
-    # --- Préparation Données STOCK ---
+    
     noms_produits = [ligne[1] for ligne in data_stock]
     qtes_stock = [int(ligne[2]) for ligne in data_stock]
 
-    # --- Préparation Données VENTES ---
+    
     ventes_par_produit = {}
     if data_cmd:
         for cmd in data_cmd:
@@ -177,18 +208,18 @@ def generer_graphiques():
             qte = int(cmd[3])
             ventes_par_produit[nom] = ventes_par_produit.get(nom, 0) + qte
 
-    # 3. Création de la figure Matplotlib
+    
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5), dpi=100)
     fig.patch.set_facecolor('#f0f0f0')
 
-    # --- GRAPHIQUE 1 : Bar Chart (Stock) ---
+    
     couleurs = ['#4CAF50' if q > 5 else '#F44336' for q in qtes_stock]
     ax1.bar(noms_produits, qtes_stock, color=couleurs)
     ax1.set_title("Niveau de Stock Actuel", fontsize=10, fontweight='bold')
     ax1.set_ylabel("Quantité")
     ax1.tick_params(axis='x', rotation=45, labelsize=8)
 
-    # --- GRAPHIQUE 2 : Pie Chart (Ventes) ---
+    
     if ventes_par_produit:
         labels = ventes_par_produit.keys()
         sizes = ventes_par_produit.values()
@@ -200,7 +231,7 @@ def generer_graphiques():
 
     plt.tight_layout()
 
-    # 4. Intégration dans Tkinter
+    
     canvas = FigureCanvasTkAgg(fig, master=frame_canvas)
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -215,15 +246,30 @@ def rafraichir_tout():
 # =============================================================================
 
 def lancer_app():
-    # On rend les variables globales pour que les fonctions (ajouter_produit_gui, etc.) puissent les voir
+   
     global fenetre, tableau_stock, entry_id, entry_nom, entry_qte, entry_prix
     global tableau_cmd, entry_cmd_idprod, entry_cmd_qte, frame_canvas
 
     fenetre = tk.Tk()
     fenetre.title("Système de Gestion Complet")
     fenetre.geometry("1000x700")
+    
+    fenetre.bind_all('<Any-KeyPress>', reset_timer)
+    fenetre.bind_all('<Any-Motion>', reset_timer)
+    
+    reset_timer()
+    
+    header_frame = tk.Frame(fenetre, bg="#2C3E50", height=40)
+    header_frame.pack(fill="x")
+    
+    btn_logout = tk.Button(header_frame, text="Se déconnecter", bg="#E74C3C", fg="white", 
+                           font=("Arial", 10, "bold"), command=deconnexion)
+    btn_logout.pack(side="right", padx=10, pady=5)
+    
+    lbl_titre = tk.Label(header_frame, text="TABLEAU DE BORD", bg="#2C3E50", fg="white", font=("Arial", 12, "bold"))
+    lbl_titre.pack(side="left", padx=10)
 
-    # Création des onglets
+    
     notebook = ttk.Notebook(fenetre)
     notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
@@ -235,7 +281,7 @@ def lancer_app():
     notebook.add(tab_cmd, text="🛒 Gestion Commandes")
     notebook.add(tab_stats, text="📊 Statistiques")
 
-    # --- CONTENU ONGLET 1 : STOCK ---
+    
     frame_form = tk.LabelFrame(tab_stock, text="Produit", padx=10, pady=10)
     frame_form.pack(fill="x", padx=10, pady=10)
 
@@ -254,7 +300,7 @@ def lancer_app():
     tableau_stock.pack(fill="both", expand=True, padx=10, pady=10)
     tableau_stock.bind("<ButtonRelease-1>", clic_stock)
 
-    # --- CONTENU ONGLET 2 : COMMANDES ---
+    
     frame_cmd_form = tk.LabelFrame(tab_cmd, text="Action Commande", padx=10, pady=10)
     frame_cmd_form.pack(fill="x", padx=10, pady=10)
 
@@ -277,17 +323,17 @@ def lancer_app():
     tableau_cmd.pack(fill="both", expand=True, padx=10, pady=10)
     tableau_cmd.bind("<ButtonRelease-1>", clic_cmd)
 
-    # --- CONTENU ONGLET 3 : STATISTIQUES ---
+    
     btn_refresh = tk.Button(tab_stats, text="🔄 Actualiser les Graphiques", command=rafraichir_tout, bg="#607D8B", fg="white")
     btn_refresh.pack(pady=10)
 
     frame_canvas = tk.Frame(tab_stats, bg="#f0f0f0")
     frame_canvas.pack(fill="both", expand=True, padx=10, pady=10)
 
-    # --- DEMARRAGE ---
+    
     rafraichir_tout()
     fenetre.mainloop()
 
-# Bloc de sécurité : permet d'importer ce fichier sans qu'il se lance tout seul
+
 if __name__ == "__main__":
     lancer_app()
