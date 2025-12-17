@@ -2,6 +2,9 @@ import csv
 import os
 from datetime import datetime 
 
+
+
+
 File_stock = 'data.csv'
 File_commande = 'commande.csv'
 

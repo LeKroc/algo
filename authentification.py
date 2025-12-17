@@ -50,32 +50,26 @@ def check_pwned_password(password):
         return False # Pas d'internet -> On laisse passer
 
 
-def register_user(username, password, email, role="commercant"):
-    # --- MODIFICATION ICI : ON UTILISE UNIQUEMENT L'API ---
+def register_user(username, password, email, role="commercant", force=False):
     
-    # On vérifie si le mot de passe est dans la base des pirates
-    if check_pwned_password(password):
-        log_attempt(username, "REGISTER_FAIL", "Mot de passe compromis (Pwned)")
-        return False, "DANGER : Ce mot de passe est connu des pirates (Pwned) !\nVeuillez en choisir un autre."
+    if not force:
+        if check_pwned_password(password):
+            return False, "PWNED_WARNING"
 
-    # Si on arrive ici, c'est que le mot de passe est "sûr" selon l'API
     
-    # Vérification pseudo existant
     with open(FILE_USERS, 'r', encoding='utf-8') as f:
         reader = csv.reader(f)
         for row in reader:
             if row and row[0] == username:
                 return False, "Nom d'utilisateur déjà pris"
 
-    # Vérification Premier utilisateur = Admin
+    
     user_count = 0
     with open(FILE_USERS, 'r', encoding='utf-8') as f:
          user_count = sum(1 for line in f)
-    
-    if user_count <= 1:
-        role = "admin"
+    if user_count <= 1: role = "admin"
 
-    # Hachage et Sauvegarde
+    
     salt = secrets.token_hex(16)
     pwd_bytes = password.encode('utf-8')
     salt_bytes = salt.encode('utf-8')
