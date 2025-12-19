@@ -2,7 +2,6 @@ import tkinter as tk
 from tkinter import messagebox
 import sys
 
-# --- Gestion des imports ---
 try:
     import authentification
 except ImportError:
@@ -34,7 +33,6 @@ class LoginApp:
         
         self.lbl_email = tk.Label(self.frame, text="Email", bg="#34495E", fg="#BDC3C7")
         self.entry_email = tk.Entry(self.frame, font=("Arial", 12))
-        # On ne pack pas l'email tout de suite (mode connexion par défaut)
         
         tk.Label(self.frame, text="Mot de passe", bg="#34495E", fg="#BDC3C7").pack(anchor="w")
         self.entry_pass = tk.Entry(self.frame, font=("Arial", 12), show="*")
@@ -79,17 +77,14 @@ class LoginApp:
         password = self.entry_pass.get()
 
         try:
-            # --- MODE INSCRIPTION ---
             if self.is_register_mode:
                 email = self.entry_email.get()
                 if not identifiant or not password or not email:
                     messagebox.showwarning("Attention", "Remplissez tous les champs")
                     return
                 
-                # Tentative d'inscription normale
                 success, msg = authentification.register_user(identifiant, password, email, force=False)
                 
-                # Si mot de passe pwned
                 if not success and msg == "PWNED_WARNING":
                     reponse = messagebox.askyesno("Alerte Sécurité", "Ce mot de passe a été trouvé dans des fuites de données (Pwned).\nEst-ce vraiment sûr de l'utiliser ?")
                     if reponse:
@@ -100,21 +95,20 @@ class LoginApp:
                 
                 elif success:
                     messagebox.showinfo("Succès", msg)
-                    self.toggle_mode() # On bascule vers la connexion
+                    self.toggle_mode() 
                 else:
                     messagebox.showerror("Erreur", msg)
 
-            # --- MODE CONNEXION ---
+            
             else:
                 if not identifiant or not password:
                     messagebox.showwarning("Attention", "Remplissez les champs")
                     return
 
-                # Appel à verify_credentials qui renvoie (True, Role) ou (False, Message)
                 success, result = authentification.verify_credentials(identifiant, password)
                 
                 if success:
-                    role_recupere = result # C'est "admin" ou "commercant"
+                    role_recupere = result 
                     self.root.destroy()
                     
                     if hasattr(interface, 'lancer_app'):
@@ -123,7 +117,7 @@ class LoginApp:
                     else:
                         messagebox.showerror("Erreur", "Le fichier interface.py n'a pas de fonction lancer_app()")
                 else:
-                    messagebox.showerror("Echec", result) # Affiche "Mot de passe incorrect" etc.
+                    messagebox.showerror("Echec", result) 
                     self.entry_pass.delete(0, tk.END)
 
         except Exception as e:

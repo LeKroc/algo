@@ -1,76 +1,189 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-import csv
-import requests  # Pour parler à l'API
-import fonction as f # Vos fonctions locales
-
+import requests  
+import fonction as f 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-# --- CONFIGURATION API ---
-API_URL = "http://127.0.0.1:5000/api/products"
-# NOTE : J'ai supprimé la ligne API_TOKEN fixe ici, car elle va changer selon l'utilisateur.
+# ==========================================
+# 1. VARIABLES GLOBALES & INIT
+# ==========================================
 
-f.init_files()
+# URL de l'API
+API_BASE_URL = "http://127.0.0.1:5000/api"
 
-# --- GESTION INACTIVITÉ ---
+# Variables pour stocker les composants graphiques
+fenetre = None
+entry_id = None
+entry_nom = None
+entry_qte = None
+entry_prix = None
+tableau_stock = None
+entry_cmd_idprod = None
+entry_cmd_qte = None
+tableau_cmd = None
+frame_canvas = None
+
+# Variables de Session
+CURRENT_USER_ROLE = "commercant" 
+JWT_TOKEN = None  
 TIMEOUT_LIMIT = 300000 
 timer_id = None
 
-# Variable pour savoir qui est connecté (par défaut commerçant)
-CURRENT_USER_ROLE = "commercant" 
+# Init fichiers locaux
+f.init_files()
+
+# ==========================================
+# 2. GESTION AUTHENTIFICATION & TIMEOUT
+# ==========================================
+
+def authentification_automatique(role_voulu):
+    global JWT_TOKEN
+    
+    if role_voulu == "admin":
+        creds = {"username": "admin", "password": "admin123"}
+    else:
+        creds = {"username": "commercant", "password": "vente123"}
+
+    try:
+        url_login = f"{API_BASE_URL}/auth/login"
+        print(f"🔵 Connexion en cours vers {url_login}...")
+        response = requests.post(url_login, json=creds)
+
+        if response.status_code == 200:
+            data = response.json()
+            JWT_TOKEN = data['token']
+            print(f"✅ TOKEN REÇU : {JWT_TOKEN[:15]}...")
+            return True
+        else:
+            print(f"❌ Échec Auth : {response.text}")
+            return False
+
+    except requests.exceptions.ConnectionError:
+        messagebox.showerror("Fatal", "Le serveur API n'est pas lancé !")
+        return False
 
 def reset_timer(event=None):
     global timer_id, fenetre
     if timer_id:
-        try:
-            fenetre.after_cancel(timer_id)
-        except:
-            pass
+        try: fenetre.after_cancel(timer_id)
+        except: pass
     timer_id = fenetre.after(TIMEOUT_LIMIT, deconnexion_automatique)
 
 def deconnexion_automatique():
-    messagebox.showwarning("Inactivité", "Vous avez été déconnecté pour inactivité.")
+    messagebox.showwarning("Inactivité", "Vous avez été déconnecté.")
     deconnexion()
 
 def deconnexion():
     global timer_id
     if timer_id:
-        try:
-            fenetre.after_cancel(timer_id)
-        except:
-            pass
+        try: fenetre.after_cancel(timer_id)
+        except: pass
     fenetre.destroy()
-    import login
-    login.LoginApp()
 
-# =============================================================================
-# LOGIQUE ONGLET STOCK (CONNECTÉ À L'API)
-# =============================================================================
+# ==========================================
+# 3. FONCTIONS DE CHARGEMENT & STATS
+# ==========================================
 
 def charger_donnees_stock():
-    """Récupère les produits depuis le SERVEUR API (Lecture publique)"""
-    # 1. On vide le tableau
+    """Récupère les produits depuis l'API"""
+    if tableau_stock is None: return 
+    
     for row in tableau_stock.get_children():
         tableau_stock.delete(row)
     
     try:
-        # 2. GET est public, pas besoin de token
-        response = requests.get(API_URL)
-        
+        response = requests.get(f"{API_BASE_URL}/products")
         if response.status_code == 200:
             produits = response.json()
-            # 3. On remplit le tableau
             for p in produits:
                 tableau_stock.insert("", tk.END, values=(p['id'], p['nom'], p['stock'], p['prix']))
-        else:
-            print("Erreur serveur:", response.status_code)
             
     except requests.exceptions.ConnectionError:
-        messagebox.showerror("Erreur Connexion", "Impossible de joindre le serveur API.\nVérifiez que 'server.py' est lancé !")
+        pass
+
+def charger_donnees_cmd():
+    """Récupère les commandes locales"""
+    if tableau_cmd is None: return
+
+    for row in tableau_cmd.get_children():
+        tableau_cmd.delete(row)
+    
+    headers, data = f.lire_commandes()
+    if data:
+        for ligne in reversed(data):
+            tableau_cmd.insert("", tk.END, values=ligne)
+
+def generer_graphiques():
+    """Génère les graphiques Matplotlib"""
+    if frame_canvas is None: return
+
+    # Nettoyer l'ancien graphique
+    for widget in frame_canvas.winfo_children(): widget.destroy()
+    
+    # --- 1. Récupération Données Stock (API) ---
+    try:
+        resp = requests.get(f"{API_BASE_URL}/products")
+        data_stock = resp.json() if resp.status_code == 200 else []
+    except: data_stock = []
+
+    noms = [p['nom'] for p in data_stock]
+    qtes = [p['stock'] for p in data_stock]
+
+    # --- 2. Récupération Données Ventes (Local) ---
+    _, data_cmd = f.lire_commandes()
+    ventes = {}
+    
+    # Calcul des ventes par produit (Nom du produit est à l'index 2, Qté à l'index 3)
+    if data_cmd:
+        for c in data_cmd: 
+            try:
+                nom_produit = c[2]
+                quantite = int(c[3])
+                ventes[nom_produit] = ventes.get(nom_produit, 0) + quantite
+            except (IndexError, ValueError):
+                continue
+
+    # --- 3. Création de la Figure ---
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5), dpi=100)
+    fig.patch.set_facecolor('#f0f0f0') # Couleur de fond gris clair
+    
+    # Graphique 1 : Barres (Stock)
+    if noms:
+        ax1.bar(noms, qtes, color=['#4CAF50' if x>5 else 'red' for x in qtes])
+        ax1.set_title("Stock Actuel (API)")
+        ax1.tick_params(axis='x', rotation=45) # Rotation des noms si trop longs
+    else:
+        ax1.text(0.5, 0.5, "Pas de données API", ha='center', va='center')
+        ax1.set_title("Stock (Vide)")
+    
+    # Graphique 2 : Camembert (Ventes)
+    if ventes:
+        ax2.pie(ventes.values(), labels=ventes.keys(), autopct='%1.1f%%', startangle=90)
+        ax2.set_title("Répartition des Ventes")
+    else:
+        # Affiche un texte si aucune vente n'est faite
+        ax2.text(0.5, 0.5, "Aucune vente enregistrée", ha='center', va='center')
+        ax2.set_title("Ventes (Vide)")
+    
+    # Affichage sur Tkinter
+    canvas = FigureCanvasTkAgg(fig, master=frame_canvas)
+    canvas.draw()
+    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+def rafraichir_tout():
+    """Fonction centrale de mise à jour"""
+    charger_donnees_stock()
+    charger_donnees_cmd()
+    generer_graphiques()
+
+# ==========================================
+# 4. ACTIONS UTILISATEUR (Boutons)
+# ==========================================
+
+# --- STOCK (API) ---
 
 def ajouter_produit_gui():
-    """Envoie le nouveau produit au SERVEUR API (Écriture Sécurisée)"""
     nom_val = entry_nom.get()
     qte_val = entry_qte.get()
     prix_val = entry_prix.get()
@@ -79,127 +192,99 @@ def ajouter_produit_gui():
         messagebox.showwarning("Attention", "Remplir tous les champs")
         return
 
-    nouveau_produit = {
-        "nom": nom_val,
-        "stock": int(qte_val),
-        "prix": float(prix_val)
-    }
-
-    # --- MODIFICATION DE SÉCURITÉ ICI ---
-    # On choisit quel badge montrer au serveur selon le rôle
-    if CURRENT_USER_ROLE == "admin":
-        token_a_envoyer = "JE_SUIS_ADMIN_12345" # Le VRAI badge (doit être le même que server.py)
-    else:
-        token_a_envoyer = "TOKEN_INVALIDE"      # Un FAUX badge
-
-    headers_securite = {
-        "Authorization": token_a_envoyer,
-        "Content-Type": "application/json"
-    }
-    # ------------------------------------
+    nouveau_produit = {"nom": nom_val, "stock": int(qte_val), "prix": float(prix_val)}
+    headers_securite = {"Authorization": JWT_TOKEN} if JWT_TOKEN else {}
 
     try:
-        # On ajoute 'headers=headers_securite'
-        response = requests.post(API_URL, json=nouveau_produit, headers=headers_securite)
+        response = requests.post(f"{API_BASE_URL}/products", json=nouveau_produit, headers=headers_securite)
         
         if response.status_code == 201:
-            messagebox.showinfo("Succès", f"Produit '{nom_val}' ajouté sur le serveur !")
+            messagebox.showinfo("Succès", "Produit ajouté !")
             vider_champs_stock()
             rafraichir_tout()
         elif response.status_code == 403:
-            # Message spécifique si le serveur refuse (Code 403)
-            messagebox.showerror("Accès Refusé", "STOP ! Vous êtes connecté en tant que Commerçant.\nSeul l'ADMIN peut ajouter du stock.")
+            messagebox.showerror("INTERDIT", "Réservé aux Admins")
+        elif response.status_code == 401:
+            messagebox.showerror("Erreur", "Token invalide")
         else:
-            messagebox.showerror("Erreur API", f"Le serveur a refusé : {response.text}")
+            messagebox.showerror("Erreur API", response.text)
             
     except requests.exceptions.ConnectionError:
-        messagebox.showerror("Erreur", "Le serveur n'est pas connecté.")
+        messagebox.showerror("Erreur", "Serveur déconnecté")
     except ValueError:
-        messagebox.showerror("Erreur", "Vérifiez que quantité et prix sont des nombres.")
+        messagebox.showerror("Erreur", "Vérifiez les nombres")
 
 def supprimer_produit_gui():
-    messagebox.showinfo("Info", "La suppression via API n'est pas encore configurée sur le serveur.")
+    selection = tableau_stock.selection()
+    if not selection:
+        messagebox.showwarning("Attention", "Sélectionnez une ligne")
+        return
+
+    vals = tableau_stock.item(selection)['values']
+    id_produit = vals[0]
+
+    if not messagebox.askyesno("Confirmation", f"Supprimer ID {id_produit} ?"): return
+
+    headers_securite = {"Authorization": JWT_TOKEN} if JWT_TOKEN else {}
+
+    try:
+        response = requests.delete(f"{API_BASE_URL}/products/{id_produit}", headers=headers_securite)
+        if response.status_code == 200:
+            messagebox.showinfo("Succès", "Supprimé !")
+            vider_champs_stock()
+            rafraichir_tout()
+        elif response.status_code == 403:
+            messagebox.showerror("INTERDIT", "Réservé aux Admins")
+        else:
+            messagebox.showerror("Erreur", f"Code : {response.status_code}")
+    except:
+        messagebox.showerror("Erreur", "Problème connexion")
 
 def clic_stock(event):
     selection = tableau_stock.selection()
     if selection:
         vals = tableau_stock.item(selection)['values']
+        entry_id.configure(state='normal')
         entry_id.delete(0, tk.END); entry_id.insert(0, vals[0])
+        entry_id.configure(state='disabled')
         entry_nom.delete(0, tk.END); entry_nom.insert(0, vals[1])
         entry_qte.delete(0, tk.END); entry_qte.insert(0, vals[2])
         entry_prix.delete(0, tk.END); entry_prix.insert(0, vals[3])
 
 def vider_champs_stock():
-    entry_id.delete(0, tk.END); entry_nom.delete(0, tk.END)
+    entry_id.configure(state='normal'); entry_id.delete(0, tk.END); entry_id.configure(state='disabled')
+    entry_nom.delete(0, tk.END)
     entry_qte.delete(0, tk.END); entry_prix.delete(0, tk.END)
 
-
-# =============================================================================
-# LOGIQUE ONGLET COMMANDES (Reste en local pour l'instant)
-# =============================================================================
-
-def charger_donnees_cmd():
-    for row in tableau_cmd.get_children():
-        tableau_cmd.delete(row)
-    headers, data = f.lire_commandes()
-    if data:
-        for ligne in reversed(data):
-            tableau_cmd.insert("", tk.END, values=ligne)
+# --- COMMANDES (LOCAL) ---
 
 def action_creer_cmd():
     id_p = entry_cmd_idprod.get()
     qte = entry_cmd_qte.get()
-    
-    if not (id_p and qte):
-        messagebox.showwarning("Erreur", "ID Produit et Quantité requis")
-        return
-        
+    if not (id_p and qte): return
     succes, msg = f.creer_commande(id_p, qte)
     if succes:
         messagebox.showinfo("Succès", msg)
         rafraichir_tout()
-        entry_cmd_idprod.delete(0, tk.END)
-        entry_cmd_qte.delete(0, tk.END)
+        entry_cmd_idprod.delete(0, tk.END); entry_cmd_qte.delete(0, tk.END)
     else:
         messagebox.showerror("Erreur", msg)
-
-def action_supprimer_cmd():
-    selection = tableau_cmd.selection()
-    if not selection:
-        messagebox.showwarning("Info", "Sélectionnez une commande à annuler")
-        return
-        
-    vals = tableau_cmd.item(selection)['values']
-    id_cmd = str(vals[0])
-    
-    if messagebox.askyesno("Confirmation", "Annuler cette commande ?\nLe stock sera remboursé."):
-        succes, msg = f.supprimer_commande(id_cmd)
-        if succes:
-            messagebox.showinfo("Succès", msg)
-            rafraichir_tout()
-        else:
-            messagebox.showerror("Erreur", msg)
 
 def action_modifier_cmd():
     selection = tableau_cmd.selection()
-    if not selection:
-        messagebox.showwarning("Info", "Sélectionnez une commande à modifier")
-        return
-    
-    vals = tableau_cmd.item(selection)['values']
-    id_cmd = str(vals[0])
+    if not selection: return
     nouvelle_qte = entry_cmd_qte.get()
-    
-    if not nouvelle_qte:
-        messagebox.showwarning("Erreur", "Entrez la nouvelle quantité")
-        return
-        
-    succes, msg = f.modifier_commande(id_cmd, nouvelle_qte)
-    if succes:
-        messagebox.showinfo("Succès", msg)
+    if not nouvelle_qte: return
+    f.modifier_commande(str(tableau_cmd.item(selection)['values'][0]), nouvelle_qte)
+    rafraichir_tout()
+
+def action_supprimer_cmd():
+    selection = tableau_cmd.selection()
+    if not selection: return
+    vals = tableau_cmd.item(selection)['values']
+    if messagebox.askyesno("Confirm", "Annuler commande ?"):
+        f.supprimer_commande(str(vals[0]))
         rafraichir_tout()
-    else:
-        messagebox.showerror("Erreur", msg)
 
 def clic_cmd(event):
     selection = tableau_cmd.selection()
@@ -208,167 +293,77 @@ def clic_cmd(event):
         entry_cmd_idprod.delete(0, tk.END); entry_cmd_idprod.insert(0, vals[1])
         entry_cmd_qte.delete(0, tk.END); entry_cmd_qte.insert(0, vals[3])
 
-# =============================================================================
-# LOGIQUE ONGLET STATISTIQUES (API + LOCAL)
-# =============================================================================
+# ==========================================
+# 5. CONSTRUCTION INTERFACE (Main)
+# ==========================================
 
-def generer_graphiques():
-    """Génère les graphiques Stock (API) et Ventes (Local)"""
-    
-    for widget in frame_canvas.winfo_children():
-        widget.destroy()
-
-    # 1. Récupération des données STOCK via API
-    try:
-        response = requests.get(API_URL)
-        if response.status_code == 200:
-            data_stock_api = response.json()
-            noms_produits = [p['nom'] for p in data_stock_api]
-            qtes_stock = [p['stock'] for p in data_stock_api]
-        else:
-            noms_produits, qtes_stock = [], []
-    except:
-        noms_produits, qtes_stock = [], []
-
-    # 2. Récupération des données COMMANDES via fichier local
-    h_cmd, data_cmd = f.lire_commandes()
-
-    if not noms_produits and not qtes_stock:
-        tk.Label(frame_canvas, text="Pas de données stock (Serveur éteint ?)").pack()
-        return
-
-    ventes_par_produit = {}
-    if data_cmd:
-        for cmd in data_cmd:
-            nom = cmd[2]
-            qte = int(cmd[3])
-            ventes_par_produit[nom] = ventes_par_produit.get(nom, 0) + qte
-    
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5), dpi=100)
-    fig.patch.set_facecolor('#f0f0f0')
-
-    # Graphique 1 : Stock (Venant de l'API)
-    couleurs = ['#4CAF50' if q > 5 else '#F44336' for q in qtes_stock]
-    ax1.bar(noms_produits, qtes_stock, color=couleurs)
-    ax1.set_title("Niveau de Stock (Serveur)", fontsize=10, fontweight='bold')
-    ax1.set_ylabel("Quantité")
-    ax1.tick_params(axis='x', rotation=45, labelsize=8)
-
-    # Graphique 2 : Ventes (Venant du fichier local)
-    if ventes_par_produit:
-        labels = ventes_par_produit.keys()
-        sizes = ventes_par_produit.values()
-        ax2.pie(sizes, labels=labels, autopct='%1.1f%%', startangle=90, colors=plt.cm.Paired.colors)
-        ax2.set_title("Répartition des Ventes", fontsize=10, fontweight='bold')
-    else:
-        ax2.text(0.5, 0.5, "Aucune vente enregistrée", ha='center', va='center')
-        ax2.axis('off')
-
-    plt.tight_layout()
-    canvas = FigureCanvasTkAgg(fig, master=frame_canvas)
-    canvas.draw()
-    canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
-
-def rafraichir_tout():
-    charger_donnees_stock()
-    charger_donnees_cmd()
-    generer_graphiques()
-
-# =============================================================================
-# LANCEMENT APP
-# =============================================================================
-
-# --- MODIFICATION DE LA SIGNATURE DE LA FONCTION ---
 def lancer_app(role_connecte="commercant"):
     global fenetre, tableau_stock, entry_id, entry_nom, entry_qte, entry_prix
     global tableau_cmd, entry_cmd_idprod, entry_cmd_qte, frame_canvas
-    
-    # On stocke le rôle reçu depuis login.py
     global CURRENT_USER_ROLE
+    
     CURRENT_USER_ROLE = role_connecte
 
+    # Connexion API Initiale
+    authentification_automatique(role_connecte)
+
+    # Fenêtre Principale
     fenetre = tk.Tk()
-    # On affiche le rôle dans le titre pour que ce soit clair
-    fenetre.title(f"Système de Gestion - Connecté en tant que : {CURRENT_USER_ROLE.upper()}")
+    fenetre.title(f"Système JWT - Rôle : {CURRENT_USER_ROLE.upper()}")
     fenetre.geometry("1000x700")
     
     fenetre.bind_all('<Any-KeyPress>', reset_timer)
     fenetre.bind_all('<Any-Motion>', reset_timer)
-    
     reset_timer()
     
-    header_frame = tk.Frame(fenetre, bg="#2C3E50", height=40)
-    header_frame.pack(fill="x")
+    # En-tête
+    header = tk.Frame(fenetre, bg="#2C3E50", height=40); header.pack(fill="x")
+    tk.Label(header, text=f"SESSION : {CURRENT_USER_ROLE.upper()}", bg="#2C3E50", fg="white", font=("Arial", 12, "bold")).pack(side="left", padx=10)
+    tk.Button(header, text="Se déconnecter", bg="#E74C3C", fg="white", command=deconnexion).pack(side="right", padx=10, pady=5)
+
+    notebook = ttk.Notebook(fenetre); notebook.pack(fill='both', expand=True, padx=10, pady=10)
+    tab_stock = tk.Frame(notebook); tab_cmd = tk.Frame(notebook); tab_stats = tk.Frame(notebook)
+    notebook.add(tab_stock, text="Gestion Stock (API)"); notebook.add(tab_cmd, text="Commandes"); notebook.add(tab_stats, text="Stats")
+
+    # --- TAB STOCK ---
+    form = tk.LabelFrame(tab_stock, text="Produit"); form.pack(fill="x", padx=10, pady=5)
+    tk.Label(form, text="ID").pack(side="left"); entry_id = tk.Entry(form, width=5, state='disabled'); entry_id.pack(side="left")
+    tk.Label(form, text="Nom").pack(side="left"); entry_nom = tk.Entry(form); entry_nom.pack(side="left")
+    tk.Label(form, text="Qte").pack(side="left"); entry_qte = tk.Entry(form, width=5); entry_qte.pack(side="left")
+    tk.Label(form, text="Prix").pack(side="left"); entry_prix = tk.Entry(form, width=10); entry_prix.pack(side="left")
     
-    btn_logout = tk.Button(header_frame, text="Se déconnecter", bg="#E74C3C", fg="white", 
-                           font=("Arial", 10, "bold"), command=deconnexion)
-    btn_logout.pack(side="right", padx=10, pady=5)
-    
-    lbl_titre = tk.Label(header_frame, text="TABLEAU DE BORD", bg="#2C3E50", fg="white", font=("Arial", 12, "bold"))
-    lbl_titre.pack(side="left", padx=10)
-
-    notebook = ttk.Notebook(fenetre)
-    notebook.pack(fill='both', expand=True, padx=10, pady=10)
-
-    tab_stock = tk.Frame(notebook, bg="#f0f0f0")
-    tab_cmd = tk.Frame(notebook, bg="#f0f0f0")
-    tab_stats = tk.Frame(notebook, bg="#f0f0f0")
-
-    notebook.add(tab_stock, text="📦 Gestion Stock (API)")
-    notebook.add(tab_cmd, text="🛒 Gestion Commandes")
-    notebook.add(tab_stats, text="📊 Statistiques")
-
-    # --- STOCK TAB ---
-    frame_form = tk.LabelFrame(tab_stock, text="Nouveau Produit (API)", padx=10, pady=10)
-    frame_form.pack(fill="x", padx=10, pady=10)
-
-    tk.Label(frame_form, text="ID (Auto)").grid(row=0, column=0); entry_id = tk.Entry(frame_form, state='disabled'); entry_id.grid(row=0, column=1)
-    tk.Label(frame_form, text="Nom").grid(row=0, column=2); entry_nom = tk.Entry(frame_form); entry_nom.grid(row=0, column=3)
-    tk.Label(frame_form, text="Qte").grid(row=0, column=4); entry_qte = tk.Entry(frame_form); entry_qte.grid(row=0, column=5)
-    tk.Label(frame_form, text="Prix").grid(row=0, column=6); entry_prix = tk.Entry(frame_form); entry_prix.grid(row=0, column=7)
-
-    f_btn_stock = tk.Frame(tab_stock); f_btn_stock.pack(pady=5)
-    tk.Button(f_btn_stock, text="Ajouter (POST)", command=ajouter_produit_gui, bg="#4CAF50", fg="white").pack(side="left", padx=5)
-    tk.Button(f_btn_stock, text="Vider Champs", command=vider_champs_stock, bg="#FF9800", fg="white").pack(side="left", padx=5)
-    tk.Button(f_btn_stock, text="Supprimer", command=supprimer_produit_gui, bg="#9E9E9E", fg="white").pack(side="left", padx=5)
+    btns = tk.Frame(tab_stock); btns.pack(pady=5)
+    tk.Button(btns, text="Ajouter (Admin)", command=ajouter_produit_gui, bg="#4CAF50", fg="white").pack(side="left", padx=5)
+    tk.Button(btns, text="Supprimer (Admin)", command=supprimer_produit_gui, bg="#F44336", fg="white").pack(side="left", padx=5)
+    tk.Button(btns, text="Vider", command=vider_champs_stock).pack(side="left", padx=5)
 
     tableau_stock = ttk.Treeview(tab_stock, columns=("id", "nom", "qte", "prix"), show="headings", height=8)
-    tableau_stock.heading("id", text="ID"); tableau_stock.heading("nom", text="Nom"); tableau_stock.heading("qte", text="Stock"); tableau_stock.heading("prix", text="Prix")
-    tableau_stock.pack(fill="both", expand=True, padx=10, pady=10)
+    for col in ["id", "nom", "qte", "prix"]: tableau_stock.heading(col, text=col.capitalize())
+    tableau_stock.pack(fill="both", expand=True, padx=10)
     tableau_stock.bind("<ButtonRelease-1>", clic_stock)
 
-    # --- CMD TAB ---
-    frame_cmd_form = tk.LabelFrame(tab_cmd, text="Action Commande (Local)", padx=10, pady=10)
-    frame_cmd_form.pack(fill="x", padx=10, pady=10)
-
-    tk.Label(frame_cmd_form, text="ID Produit :").grid(row=0, column=0, padx=5)
-    entry_cmd_idprod = tk.Entry(frame_cmd_form)
-    entry_cmd_idprod.grid(row=0, column=1, padx=5)
-
-    tk.Label(frame_cmd_form, text="Quantité :").grid(row=0, column=2, padx=5)
-    entry_cmd_qte = tk.Entry(frame_cmd_form)
-    entry_cmd_qte.grid(row=0, column=3, padx=5)
-
-    f_btn_cmd = tk.Frame(tab_cmd); f_btn_cmd.pack(pady=5)
-    tk.Button(f_btn_cmd, text="✚ Nouvelle Commande", command=action_creer_cmd, bg="#4CAF50", fg="white").pack(side="left", padx=5)
-    tk.Button(f_btn_cmd, text="✎ Modifier (Qte)", command=action_modifier_cmd, bg="#2196F3", fg="white").pack(side="left", padx=5)
-    tk.Button(f_btn_cmd, text="✖ Annuler Commande", command=action_supprimer_cmd, bg="#F44336", fg="white").pack(side="left", padx=5)
+    # --- TAB CMD ---
+    f_cmd = tk.LabelFrame(tab_cmd, text="Commande"); f_cmd.pack(fill="x", padx=10, pady=5)
+    tk.Label(f_cmd, text="ID Prod").pack(side="left"); entry_cmd_idprod = tk.Entry(f_cmd); entry_cmd_idprod.pack(side="left")
+    tk.Label(f_cmd, text="Qte").pack(side="left"); entry_cmd_qte = tk.Entry(f_cmd); entry_cmd_qte.pack(side="left")
+    
+    b_cmd = tk.Frame(tab_cmd); b_cmd.pack(pady=5)
+    tk.Button(b_cmd, text="Nouvelle", command=action_creer_cmd, bg="#4CAF50").pack(side="left", padx=5)
+    tk.Button(b_cmd, text="Modifier", command=action_modifier_cmd, bg="#2196F3").pack(side="left", padx=5)
+    tk.Button(b_cmd, text="Annuler", command=action_supprimer_cmd, bg="#F44336").pack(side="left", padx=5)
 
     tableau_cmd = ttk.Treeview(tab_cmd, columns=("id", "pid", "nom", "qte", "total", "date"), show="headings")
-    tableau_cmd.heading("id", text="ID Cmd"); tableau_cmd.heading("pid", text="ID Prod"); tableau_cmd.heading("nom", text="Produit")
-    tableau_cmd.heading("qte", text="Qte Vendue"); tableau_cmd.heading("total", text="Total €"); tableau_cmd.heading("date", text="Date")
-    tableau_cmd.pack(fill="both", expand=True, padx=10, pady=10)
+    for col in ["id", "pid", "nom", "qte", "total", "date"]: tableau_cmd.heading(col, text=col)
+    tableau_cmd.pack(fill="both", expand=True, padx=10)
     tableau_cmd.bind("<ButtonRelease-1>", clic_cmd)
 
-    # --- STATS TAB ---
-    btn_refresh = tk.Button(tab_stats, text="🔄 Actualiser les Graphiques", command=rafraichir_tout, bg="#607D8B", fg="white")
-    btn_refresh.pack(pady=10)
+    # --- TAB STATS ---
+    tk.Button(tab_stats, text="Actualiser", command=rafraichir_tout).pack(pady=5)
+    frame_canvas = tk.Frame(tab_stats); frame_canvas.pack(fill="both", expand=True)
 
-    frame_canvas = tk.Frame(tab_stats, bg="#f0f0f0")
-    frame_canvas.pack(fill="both", expand=True, padx=10, pady=10)
-
+    # Premier chargement
     rafraichir_tout()
     fenetre.mainloop()
 
 if __name__ == "__main__":
-    lancer_app()
+    lancer_app("admin")

@@ -40,7 +40,6 @@ def check_pwned_password(password):
         return False 
 
 def register_user(username, password, email, role="commercant", force=False):
-    # Note: Vous pouvez changer role="admin" ici temporairement si besoin
     if not force:
         if check_pwned_password(password):
             return False, "PWNED_WARNING"
@@ -54,7 +53,6 @@ def register_user(username, password, email, role="commercant", force=False):
     user_count = 0
     with open(FILE_USERS, 'r', encoding='utf-8') as f:
          user_count = sum(1 for line in f)
-    # Si c'est le tout premier utilisateur, on le force Admin
     if user_count <= 1: role = "admin"
 
     salt = secrets.token_hex(16)
@@ -85,13 +83,11 @@ def verify_credentials(identifiant, password):
         
         for row in reader:
             if row:
-                # On vérifie pseudo (col 0) ou email (col 3)
                 if row[0] == identifiant or (len(row) > 3 and row[3] == identifiant):
                     user_found = row
                     break
     
     if not user_found:
-        # Fake hash pour éviter les attaques temporelles
         pwd_bytes = "dummy".encode('utf-8')
         salt_bytes = "dummy".encode('utf-8')
         hashlib.pbkdf2_hmac('sha256', pwd_bytes, salt_bytes, 100000)
@@ -109,7 +105,6 @@ def verify_credentials(identifiant, password):
 
     if hmac.compare_digest(stored_hash, new_hash):
         log_attempt(username_reel, "LOGIN_SUCCESS", "Connexion réussie")
-        # IMPORTANT : On récupère le rôle (colonne 4)
         role_trouve = user_found[4] 
         return True, role_trouve
     else:
