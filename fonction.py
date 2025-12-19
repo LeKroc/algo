@@ -11,7 +11,7 @@ File_commande = 'commande.csv'
 def init_files():
     """Initialise les fichiers s'ils n'existent pas"""
     if not os.path.exists(File_stock):
-        create_csv() # Utilise votre fonction existante
+        create_csv() 
     
     if not os.path.exists(File_commande):
         headers = ["id_cmd", "id_prod", "nom_prod", "qte", "total", "date"]
@@ -19,7 +19,7 @@ def init_files():
             writer = csv.writer(file)
             writer.writerow(headers)
 
-# --- DEFINITION DES FONCTIONS ---
+
 
 def create_csv():
     donnees = [
@@ -146,7 +146,6 @@ def supprimer_commande(id_cmd):
     cmd_a_supprimer = None
     index = -1
 
-    # Trouver la commande
     for i, row in enumerate(data_cmd):
         if row[0] == str(id_cmd):
             cmd_a_supprimer = row
@@ -158,10 +157,8 @@ def supprimer_commande(id_cmd):
     id_prod = cmd_a_supprimer[1]
     qte_a_rembourser = int(cmd_a_supprimer[3])
 
-    # 1. Rembourser le stock
     update_stock_quantite(id_prod, qte_a_rembourser)
 
-    # 2. Supprimer la ligne
     del data_cmd[index]
     sauvegarder_cmd_csv(h_cmd, data_cmd)
 
@@ -194,14 +191,12 @@ def modifier_commande(id_cmd, nouvelle_qte):
     succes, msg = update_stock_quantite(id_prod, diff_stock)
     if not succes: return False, msg
 
-    # Mise à jour commande
-    # On doit relire le produit pour le prix unitaire
     headers_stk, data_stk = parcourir()
     prod = next((p for p in data_stk if p[0] == str(id_prod)), None)
     prix = float(prod[3])
 
     cmd[3] = str(nouvelle_qte)
-    cmd[4] = str(nouvelle_qte * prix) # Nouveau total
+    cmd[4] = str(nouvelle_qte * prix) 
     cmd[5] = datetime.now().strftime("%Y-%m-%d %H:%M") + " (Modif)"
     
     data_cmd[idx] = cmd
@@ -267,9 +262,7 @@ def recherche_prix(prix):
             for ligne in resultats:
                 print(ligne)
 
-# --- PROGRAMME PRINCIPAL (PROTÉGÉ) ---
-# Ce bloc ne s'exécute QUE si vous lancez "python fonction.py"
-# Il ne s'exécute PAS si vous faites "import fonction"
+
 
 if __name__ == "__main__":
     create_csv()

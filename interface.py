@@ -1,21 +1,27 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import csv
-import fonction as f
-
+import requests  # Pour parler à l'API
+import fonction as f # Vos fonctions locales
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
+# --- CONFIGURATION API ---
+API_URL = "http://127.0.0.1:5000/api/products"
+# NOTE : J'ai supprimé la ligne API_TOKEN fixe ici, car elle va changer selon l'utilisateur.
 
 f.init_files()
 
+# --- GESTION INACTIVITÉ ---
 TIMEOUT_LIMIT = 300000 
 timer_id = None
 
+# Variable pour savoir qui est connecté (par défaut commerçant)
+CURRENT_USER_ROLE = "commercant" 
+
 def reset_timer(event=None):
     global timer_id, fenetre
-    
     if timer_id:
         try:
             fenetre.after_cancel(timer_id)
@@ -24,7 +30,7 @@ def reset_timer(event=None):
     timer_id = fenetre.after(TIMEOUT_LIMIT, deconnexion_automatique)
 
 def deconnexion_automatique():
-    messagebox.showwarning()
+    messagebox.showwarning("Inactivité", "Vous avez été déconnecté pour inactivité.")
     deconnexion()
 
 def deconnexion():
@@ -35,60 +41,84 @@ def deconnexion():
         except:
             pass
     fenetre.destroy()
-    
     import login
     login.LoginApp()
-    
-
 
 # =============================================================================
-# LOGIQUE ONGLET STOCK
+# LOGIQUE ONGLET STOCK (CONNECTÉ À L'API)
 # =============================================================================
 
 def charger_donnees_stock():
+    """Récupère les produits depuis le SERVEUR API (Lecture publique)"""
+    # 1. On vide le tableau
     for row in tableau_stock.get_children():
         tableau_stock.delete(row)
-    headers, data = f.parcourir()
-    if data:
-        for ligne in data:
-            tableau_stock.insert("", tk.END, values=ligne)
+    
+    try:
+        # 2. GET est public, pas besoin de token
+        response = requests.get(API_URL)
+        
+        if response.status_code == 200:
+            produits = response.json()
+            # 3. On remplit le tableau
+            for p in produits:
+                tableau_stock.insert("", tk.END, values=(p['id'], p['nom'], p['stock'], p['prix']))
+        else:
+            print("Erreur serveur:", response.status_code)
+            
+    except requests.exceptions.ConnectionError:
+        messagebox.showerror("Erreur Connexion", "Impossible de joindre le serveur API.\nVérifiez que 'server.py' est lancé !")
 
 def ajouter_produit_gui():
-    id_val, nom_val = entry_id.get(), entry_nom.get()
-    qte_val, prix_val = entry_qte.get(), entry_prix.get()
+    """Envoie le nouveau produit au SERVEUR API (Écriture Sécurisée)"""
+    nom_val = entry_nom.get()
+    qte_val = entry_qte.get()
+    prix_val = entry_prix.get()
 
-    if not (id_val and nom_val and qte_val and prix_val):
+    if not (nom_val and qte_val and prix_val):
         messagebox.showwarning("Attention", "Remplir tous les champs")
         return
 
-    headers, data = f.parcourir()
-    if data and any(l[0] == id_val for l in data):
-        messagebox.showerror("Erreur", f"L'ID {id_val} existe déjà !")
-        return
+    nouveau_produit = {
+        "nom": nom_val,
+        "stock": int(qte_val),
+        "prix": float(prix_val)
+    }
 
-    with open(f.FILE_STOCK, 'a', encoding='utf-8', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow([id_val, nom_val, qte_val, prix_val])
-    
-    vider_champs_stock()
-    rafraichir_tout()
-    messagebox.showinfo("Succès", f"Produit '{nom_val}' ajouté !")
+    # --- MODIFICATION DE SÉCURITÉ ICI ---
+    # On choisit quel badge montrer au serveur selon le rôle
+    if CURRENT_USER_ROLE == "admin":
+        token_a_envoyer = "JE_SUIS_ADMIN_12345" # Le VRAI badge (doit être le même que server.py)
+    else:
+        token_a_envoyer = "TOKEN_INVALIDE"      # Un FAUX badge
+
+    headers_securite = {
+        "Authorization": token_a_envoyer,
+        "Content-Type": "application/json"
+    }
+    # ------------------------------------
+
+    try:
+        # On ajoute 'headers=headers_securite'
+        response = requests.post(API_URL, json=nouveau_produit, headers=headers_securite)
+        
+        if response.status_code == 201:
+            messagebox.showinfo("Succès", f"Produit '{nom_val}' ajouté sur le serveur !")
+            vider_champs_stock()
+            rafraichir_tout()
+        elif response.status_code == 403:
+            # Message spécifique si le serveur refuse (Code 403)
+            messagebox.showerror("Accès Refusé", "STOP ! Vous êtes connecté en tant que Commerçant.\nSeul l'ADMIN peut ajouter du stock.")
+        else:
+            messagebox.showerror("Erreur API", f"Le serveur a refusé : {response.text}")
+            
+    except requests.exceptions.ConnectionError:
+        messagebox.showerror("Erreur", "Le serveur n'est pas connecté.")
+    except ValueError:
+        messagebox.showerror("Erreur", "Vérifiez que quantité et prix sont des nombres.")
 
 def supprimer_produit_gui():
-    selection = tableau_stock.selection()
-    if not selection:
-        messagebox.showwarning("Attention", "Sélectionnez un produit")
-        return
-    
-    valeurs = tableau_stock.item(selection)['values']
-    id_suppr = str(valeurs[0])
-    
-    h, data = f.parcourir()
-    new_data = [l for l in data if l[0] != id_suppr]
-    f.sauvegarder_csv(h, new_data)
-    
-    vider_champs_stock()
-    rafraichir_tout()
+    messagebox.showinfo("Info", "La suppression via API n'est pas encore configurée sur le serveur.")
 
 def clic_stock(event):
     selection = tableau_stock.selection()
@@ -105,7 +135,7 @@ def vider_champs_stock():
 
 
 # =============================================================================
-# LOGIQUE ONGLET COMMANDES
+# LOGIQUE ONGLET COMMANDES (Reste en local pour l'instant)
 # =============================================================================
 
 def charger_donnees_cmd():
@@ -179,47 +209,52 @@ def clic_cmd(event):
         entry_cmd_qte.delete(0, tk.END); entry_cmd_qte.insert(0, vals[3])
 
 # =============================================================================
-# LOGIQUE ONGLET STATISTIQUES (MATPLOTLIB)
+# LOGIQUE ONGLET STATISTIQUES (API + LOCAL)
 # =============================================================================
 
 def generer_graphiques():
-    """Génère les graphiques Stock et Ventes"""
+    """Génère les graphiques Stock (API) et Ventes (Local)"""
     
     for widget in frame_canvas.winfo_children():
         widget.destroy()
 
-   
-    h_stock, data_stock = f.parcourir()
+    # 1. Récupération des données STOCK via API
+    try:
+        response = requests.get(API_URL)
+        if response.status_code == 200:
+            data_stock_api = response.json()
+            noms_produits = [p['nom'] for p in data_stock_api]
+            qtes_stock = [p['stock'] for p in data_stock_api]
+        else:
+            noms_produits, qtes_stock = [], []
+    except:
+        noms_produits, qtes_stock = [], []
+
+    # 2. Récupération des données COMMANDES via fichier local
     h_cmd, data_cmd = f.lire_commandes()
 
-    if not data_stock:
-        tk.Label(frame_canvas, text="Pas de données stock à afficher").pack()
+    if not noms_produits and not qtes_stock:
+        tk.Label(frame_canvas, text="Pas de données stock (Serveur éteint ?)").pack()
         return
 
-    
-    noms_produits = [ligne[1] for ligne in data_stock]
-    qtes_stock = [int(ligne[2]) for ligne in data_stock]
-
-    
     ventes_par_produit = {}
     if data_cmd:
         for cmd in data_cmd:
             nom = cmd[2]
             qte = int(cmd[3])
             ventes_par_produit[nom] = ventes_par_produit.get(nom, 0) + qte
-
     
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 5), dpi=100)
     fig.patch.set_facecolor('#f0f0f0')
 
-    
+    # Graphique 1 : Stock (Venant de l'API)
     couleurs = ['#4CAF50' if q > 5 else '#F44336' for q in qtes_stock]
     ax1.bar(noms_produits, qtes_stock, color=couleurs)
-    ax1.set_title("Niveau de Stock Actuel", fontsize=10, fontweight='bold')
+    ax1.set_title("Niveau de Stock (Serveur)", fontsize=10, fontweight='bold')
     ax1.set_ylabel("Quantité")
     ax1.tick_params(axis='x', rotation=45, labelsize=8)
 
-    
+    # Graphique 2 : Ventes (Venant du fichier local)
     if ventes_par_produit:
         labels = ventes_par_produit.keys()
         sizes = ventes_par_produit.values()
@@ -230,8 +265,6 @@ def generer_graphiques():
         ax2.axis('off')
 
     plt.tight_layout()
-
-    
     canvas = FigureCanvasTkAgg(fig, master=frame_canvas)
     canvas.draw()
     canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
@@ -242,16 +275,21 @@ def rafraichir_tout():
     generer_graphiques()
 
 # =============================================================================
-# FONCTION DE LANCEMENT DE L'APPLICATION (ETAPE 3)
+# LANCEMENT APP
 # =============================================================================
 
-def lancer_app():
-   
+# --- MODIFICATION DE LA SIGNATURE DE LA FONCTION ---
+def lancer_app(role_connecte="commercant"):
     global fenetre, tableau_stock, entry_id, entry_nom, entry_qte, entry_prix
     global tableau_cmd, entry_cmd_idprod, entry_cmd_qte, frame_canvas
+    
+    # On stocke le rôle reçu depuis login.py
+    global CURRENT_USER_ROLE
+    CURRENT_USER_ROLE = role_connecte
 
     fenetre = tk.Tk()
-    fenetre.title("Système de Gestion Complet")
+    # On affiche le rôle dans le titre pour que ce soit clair
+    fenetre.title(f"Système de Gestion - Connecté en tant que : {CURRENT_USER_ROLE.upper()}")
     fenetre.geometry("1000x700")
     
     fenetre.bind_all('<Any-KeyPress>', reset_timer)
@@ -269,7 +307,6 @@ def lancer_app():
     lbl_titre = tk.Label(header_frame, text="TABLEAU DE BORD", bg="#2C3E50", fg="white", font=("Arial", 12, "bold"))
     lbl_titre.pack(side="left", padx=10)
 
-    
     notebook = ttk.Notebook(fenetre)
     notebook.pack(fill='both', expand=True, padx=10, pady=10)
 
@@ -277,31 +314,31 @@ def lancer_app():
     tab_cmd = tk.Frame(notebook, bg="#f0f0f0")
     tab_stats = tk.Frame(notebook, bg="#f0f0f0")
 
-    notebook.add(tab_stock, text="📦 Gestion Stock")
+    notebook.add(tab_stock, text="📦 Gestion Stock (API)")
     notebook.add(tab_cmd, text="🛒 Gestion Commandes")
     notebook.add(tab_stats, text="📊 Statistiques")
 
-    
-    frame_form = tk.LabelFrame(tab_stock, text="Produit", padx=10, pady=10)
+    # --- STOCK TAB ---
+    frame_form = tk.LabelFrame(tab_stock, text="Nouveau Produit (API)", padx=10, pady=10)
     frame_form.pack(fill="x", padx=10, pady=10)
 
-    tk.Label(frame_form, text="ID").grid(row=0, column=0); entry_id = tk.Entry(frame_form); entry_id.grid(row=0, column=1)
+    tk.Label(frame_form, text="ID (Auto)").grid(row=0, column=0); entry_id = tk.Entry(frame_form, state='disabled'); entry_id.grid(row=0, column=1)
     tk.Label(frame_form, text="Nom").grid(row=0, column=2); entry_nom = tk.Entry(frame_form); entry_nom.grid(row=0, column=3)
     tk.Label(frame_form, text="Qte").grid(row=0, column=4); entry_qte = tk.Entry(frame_form); entry_qte.grid(row=0, column=5)
     tk.Label(frame_form, text="Prix").grid(row=0, column=6); entry_prix = tk.Entry(frame_form); entry_prix.grid(row=0, column=7)
 
     f_btn_stock = tk.Frame(tab_stock); f_btn_stock.pack(pady=5)
-    tk.Button(f_btn_stock, text="Ajouter", command=ajouter_produit_gui, bg="#4CAF50", fg="white").pack(side="left", padx=5)
-    tk.Button(f_btn_stock, text="Vider", command=vider_champs_stock, bg="#FF9800", fg="white").pack(side="left", padx=5)
-    tk.Button(f_btn_stock, text="Supprimer", command=supprimer_produit_gui, bg="#F44336", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_stock, text="Ajouter (POST)", command=ajouter_produit_gui, bg="#4CAF50", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_stock, text="Vider Champs", command=vider_champs_stock, bg="#FF9800", fg="white").pack(side="left", padx=5)
+    tk.Button(f_btn_stock, text="Supprimer", command=supprimer_produit_gui, bg="#9E9E9E", fg="white").pack(side="left", padx=5)
 
     tableau_stock = ttk.Treeview(tab_stock, columns=("id", "nom", "qte", "prix"), show="headings", height=8)
     tableau_stock.heading("id", text="ID"); tableau_stock.heading("nom", text="Nom"); tableau_stock.heading("qte", text="Stock"); tableau_stock.heading("prix", text="Prix")
     tableau_stock.pack(fill="both", expand=True, padx=10, pady=10)
     tableau_stock.bind("<ButtonRelease-1>", clic_stock)
 
-    
-    frame_cmd_form = tk.LabelFrame(tab_cmd, text="Action Commande", padx=10, pady=10)
+    # --- CMD TAB ---
+    frame_cmd_form = tk.LabelFrame(tab_cmd, text="Action Commande (Local)", padx=10, pady=10)
     frame_cmd_form.pack(fill="x", padx=10, pady=10)
 
     tk.Label(frame_cmd_form, text="ID Produit :").grid(row=0, column=0, padx=5)
@@ -323,17 +360,15 @@ def lancer_app():
     tableau_cmd.pack(fill="both", expand=True, padx=10, pady=10)
     tableau_cmd.bind("<ButtonRelease-1>", clic_cmd)
 
-    
+    # --- STATS TAB ---
     btn_refresh = tk.Button(tab_stats, text="🔄 Actualiser les Graphiques", command=rafraichir_tout, bg="#607D8B", fg="white")
     btn_refresh.pack(pady=10)
 
     frame_canvas = tk.Frame(tab_stats, bg="#f0f0f0")
     frame_canvas.pack(fill="both", expand=True, padx=10, pady=10)
 
-    
     rafraichir_tout()
     fenetre.mainloop()
-
 
 if __name__ == "__main__":
     lancer_app()
