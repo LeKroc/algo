@@ -1,6 +1,8 @@
-id,nom_produit,quantité,prix
-1,Stylo,10,1.5
-2,Cahier,5,3.0
-3,Gomme,20,0.5
-4,Crayon,15,0.75
-5,Feutre,8,2.0
+id,nom,stock,prix
+1,Stylo Bille,45,1.5
+2,Cahier A4,28,3.5
+3,Gomme Blanche,100,0.5
+4,Crayon HB,40,0.8
+5,Feutre Noir,25,2.0
+6,Clé USB 32Go,10,15.0
+7,Souris Sans Fil,15,25.5
