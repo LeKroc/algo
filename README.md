@@ -1,2 +1,4 @@
-# 1ère étape : Vous développerez une application de gestion de produits pour commerçants, avec lecture de fichiers, ajout, tri et recherche.
-# 2ème étape : Le projet évoluera vers une version multi-utilisateurs avec sécurisation des données (détection de mots depasse compromis via API). Une interface graphique (Tkinter ou PyQt), la gestiondes commandes et affichage de statistiques (Matplotlib, Seaborn) viendront enrichir outil.
+# Limites du projet : 
+- Le fais que les clients ne peuvent pas supprimer leurs commandes mais qu'ils soient obligés de conctacter un administrateur pour supprimer ou modifier leurs commandes
+- Faille de sécurité si accès au fichier locaux on peut modifier les permissions des utilisateurs 
+- Vérifier qu'il n'existe pas déjà un compte
