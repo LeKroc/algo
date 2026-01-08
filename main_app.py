@@ -11,6 +11,7 @@ from datetime import datetime
 import re 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import authentification
 
 # CONFIGURATION
 ctk.set_appearance_mode("Dark")
@@ -47,17 +48,27 @@ class SecurityManager:
 
     @staticmethod
     def register(username, password):
+        # 1. Vérification complexité (Regex locale)
         valid, msg = SecurityManager.check_complexity(password)
         if not valid: return False, msg
+
+        # 2. Vérification API (via authentification.py) -> AJOUT
+        try:
+            is_pwned = authentification.check_pwned_password(password)
+            if is_pwned:
+                return False, "Ce mot de passe a été compromis (Pwned) !"
+        except Exception as e:
+            print(f"Erreur API Pwned: {e}")
+            # En cas d'erreur réseau on laisse passer 
         
+        # 3. Création du compte (Suite normale du code)
         salt = secrets.token_hex(16)
         key = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt.encode('utf-8'), 100000)
         
-        # Attribution auto du rôle pour la démo
         role = "admin" if "admin" in username.lower() else "commercant"
         
         with open(FILE_USERS, 'a', encoding='utf-8', newline='') as f:
-            csv.writer(f).writerow([username, salt, key.hex(), role])
+            csv.writer(f).writerow([username, salt, key.hex(), role]) # 4 colonnes comme dans votre main_app
         return True, f"Compte créé (Rôle: {role})"
 
     @staticmethod
@@ -278,4 +289,5 @@ class App(ctk.CTk):
 
 if __name__ == "__main__":
     app = App()
+
     app.mainloop()
